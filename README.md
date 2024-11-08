@@ -12,10 +12,13 @@ git clone --recursive https://github.com/JamesYang-7/VolumeRenderer.git
 - Ninja
 
 #### Command Line
-On Windows, this should be done in a Developer Command Prompt for VS
+On Windows, this should be done in a Developer Command Prompt. First install VS2022
+and search for "x64 native tools command prompt" in the start menu.
 ```
 cmake -B build -G Ninja
 cmake --build build
+cd build
+vol_renderer.exe
 ```
 
 #### VSCode

@@ -30,9 +30,8 @@ bool firstMouse = true;
 float deltaTime = 0.0f;	// time between current frame and last frame
 float lastFrame = 0.0f;
 
-std::string rootDir = "F:/Code/volume_renderer/";
-std::string vertexShaderFile = rootDir + "src/vertex_shader.txt";
-std::string fragmentShaderFile = rootDir + "src/fragment_shader.txt";
+std::string vertexShaderFile = "../src/vertex_shader.txt";
+std::string fragmentShaderFile = "../src/fragment_shader.txt";
 
 int main() {
     // Initialize GLFW
@@ -77,12 +76,7 @@ int main() {
     // load mesh
     std::vector<glm::vec3> vertices;
     std::vector<GLuint> faces;
-    readOBJ(rootDir + "data/cube.obj", vertices, faces);
-    // GLfloat vertices[] = {
-    //     0.0f, 0.0f, 0.0f,
-    //     0.0f, 1.0f, 0.0f,
-    //     1.0f, 0.0f, 0.0f
-    // };
+    readOBJ("../data/cube.obj", vertices, faces);
     // Compile and link shaders
     Shader shader(vertexShaderFile.c_str(), fragmentShaderFile.c_str());
 
@@ -97,14 +91,12 @@ int main() {
     // Load vertices into VBO
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), vertices.data(), GL_STATIC_DRAW);
-    // glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
     // Load indices into EBO
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, faces.size() * sizeof(GLuint), faces.data(), GL_STATIC_DRAW);
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (GLvoid*)0);
-    // glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
     glEnableVertexAttribArray(0);
 
     glBindVertexArray(0);
@@ -138,7 +130,6 @@ int main() {
 
         // Draw the mesh
         glDrawElements(GL_TRIANGLES, faces.size(), GL_UNSIGNED_INT, 0);
-        // glDrawArrays(GL_TRIANGLES, 0, 3);
 
         // Unbind the VAO
         glBindVertexArray(0);

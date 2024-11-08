@@ -23,9 +23,9 @@ bool readOBJ(const std::string& filename, std::vector<glm::vec3>& vertices, std:
         } else if (prefix == "f") {
             GLuint a, b, c;
             ss >> a >> b >> c;
-            faces.push_back(a);
-            faces.push_back(b);
-            faces.push_back(c);
+            faces.push_back(a - 1);
+            faces.push_back(b - 1);
+            faces.push_back(c - 1);
         }
     }
     infile.close();
