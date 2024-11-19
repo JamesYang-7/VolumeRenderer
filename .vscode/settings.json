@@ -2,8 +2,12 @@
     "cmake.generator": "Ninja",
 	"cmake.buildDirectory":"${workspaceFolder}/build",
 	"cmake.configureArgs": [
-		"-DTCNN_CUDA_ARCHITECTURES=89",
 		"-DCMAKE_TOOLCHAIN_FILE=${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "-DVCPKG_TARGET_TRIPLET=x64-windows"
-	]
+	],
+	"files.associations": {
+		"*.cu": "cuda-cpp",
+		"iostream": "cpp",
+		"vector": "cpp"
+	}
 }

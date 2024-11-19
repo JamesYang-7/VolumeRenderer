@@ -28,10 +28,10 @@ bool firstMouse = true;
 
 // timing
 float deltaTime = 0.0f;	// time between current frame and last frame
-float lastFrame = 0.0f;
+float lastTime = 0.0f;
 
-std::string vertexShaderFile = "../src/vertex_shader.txt";
-std::string fragmentShaderFile = "../src/fragment_shader.txt";
+std::string vertexShaderFile = "../shaders/texture.vs";
+std::string fragmentShaderFile = "../shaders/texture.frag";
 
 int main() {
     // Initialize GLFW
@@ -73,63 +73,90 @@ int main() {
     // Set background color
     glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
     glEnable(GL_DEPTH_TEST);
-    // load mesh
-    std::vector<glm::vec3> vertices;
-    std::vector<GLuint> faces;
-    readOBJ("../data/cube.obj", vertices, faces);
-    // Compile and link shaders
-    Shader shader(vertexShaderFile.c_str(), fragmentShaderFile.c_str());
+
+    // load texture
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    // Define the texture size and format
+    GLsizei width = 800, height = 600;
+    std::vector<GLubyte> pixelData(width * height * 4, 127);
+    // Initialize a red line
+    for (int i = 0; i < width; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            pixelData[(j * width + i) * 4 + 0] = 255; // R
+            pixelData[(j * width + i) * 4 + 1] = 0;   // G
+            pixelData[(j * width + i) * 4 + 2] = 0;   // B
+            pixelData[(j * width + i) * 4 + 3] = 255; // A
+        }
+    }
+    // Upload the texture data
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelData.data());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    float vertices[] = {
+        // Positions    // TexCoords
+        -1.0f, -1.0f,   0.0f, 0.0f,
+        1.0f, -1.0f,   1.0f, 0.0f,
+        -1.0f,  1.0f,   0.0f, 1.0f,
+        1.0f,  1.0f,   1.0f, 1.0f
+    };
 
     // Generate and bind VAO and VBO
-    GLuint VAO, VBO, EBO;
+    GLuint VAO, VBO;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
 
     glBindVertexArray(VAO);
-
-    // Load vertices into VBO
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), vertices.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-    // Load indices into EBO
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, faces.size() * sizeof(GLuint), faces.data(), GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (GLvoid*)0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (GLvoid*)0);
     glEnableVertexAttribArray(0);
 
     glBindVertexArray(0);
 
-    // Use the shader program
+    // Compile and link shaders
+    Shader shader(vertexShaderFile.c_str(), fragmentShaderFile.c_str());
     shader.use();
+
+    int y = 0;
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
 
         // per-frame time logic
-        float currentFrame = static_cast<float>(glfwGetTime());
-        deltaTime = currentFrame - lastFrame;
-        lastFrame = currentFrame;
         processInput(window);
+        float currentTime = static_cast<float>(glfwGetTime());
+        deltaTime = currentTime - lastTime;
+        if (deltaTime < 0.05f) continue;
+        lastTime = currentTime;
+
+        y = (y + 1) % height;
+        int j = (y-3 + height) % height;
+        for (int i = 0; i < width; ++i) {
+            // move up the line
+            pixelData[(y * width + i) * 4 + 0] = 255; // R
+            pixelData[(y * width + i) * 4 + 1] = 0;   // G
+            pixelData[(y * width + i) * 4 + 2] = 0;   // B
+            pixelData[(y * width + i) * 4 + 3] = 255; // A
+
+            pixelData[(j * width + i) * 4 + 0] = 127; // R
+            pixelData[(j * width + i) * 4 + 1] = 127; // G
+            pixelData[(j * width + i) * 4 + 2] = 127; // B
+            pixelData[(j * width + i) * 4 + 3] = 127; // A
+        }
 
         // Clear the color and depth buffers
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader.use();
-
-        glm::mat4 view = camera.GetViewMatrix();
-        shader.setMat4("view", view);
-        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (GLfloat)WIDTH / (GLfloat)HEIGHT, 0.1f, 100.0f);
-        shader.setMat4("projection", projection);
-        glm::mat4 model = glm::mat4(1.0f);
-        shader.setMat4("model", model);
-
-        // Bind the VAO
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixelData.data());
         glBindVertexArray(VAO);
-
-        // Draw the mesh
-        glDrawElements(GL_TRIANGLES, faces.size(), GL_UNSIGNED_INT, 0);
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
         // Unbind the VAO
         glBindVertexArray(0);
@@ -142,7 +169,6 @@ int main() {
     // Clean up
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
-    glDeleteBuffers(1, &EBO);
     glfwTerminate();
     return 0;
 }
