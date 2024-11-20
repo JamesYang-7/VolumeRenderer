@@ -217,7 +217,7 @@ list(APPEND VOLRENDERER_LINK_LIBRARIES
 # Targets
 ###############################################################################
 
-add_executable(mesh_renderer src/mesh_renderer.cpp src/obj.cpp)
+add_executable(mesh_renderer src/mesh_renderer.cpp src/obj.cpp src/gui.cpp)
 target_include_directories(mesh_renderer PRIVATE ${VOLRENDERER_INCLUDE_DIRS})
 target_link_libraries(mesh_renderer PRIVATE ${VOLRENDERER_GL_LIBRARIES})
 
@@ -225,7 +225,7 @@ add_executable(device_test src/device_test.cpp)
 target_include_directories(device_test PRIVATE ${VOLRENDERER_INCLUDE_DIRS})
 target_link_libraries(device_test PRIVATE ${VOLRENDERER_GL_LIBRARIES})
 
-add_executable(texture_renderer src/texture_renderer.cpp)
+add_executable(texture_renderer src/texture_renderer.cpp src/gui.cpp)
 target_include_directories(texture_renderer PRIVATE ${VOLRENDERER_INCLUDE_DIRS})
 target_link_libraries(texture_renderer PRIVATE ${VOLRENDERER_GL_LIBRARIES})
 
