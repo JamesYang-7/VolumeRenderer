@@ -2,10 +2,9 @@
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
-#include "camera.h"
+#include "vol_renderer/camera.h"
 
 // Window dimensions
-const GLuint WIDTH = 800, HEIGHT = 600;
 extern Camera main_camera;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);

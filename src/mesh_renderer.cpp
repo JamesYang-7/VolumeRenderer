@@ -3,11 +3,11 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
-#include "common.h"
-#include "obj.h"
-#include "camera.h"
-#include "shader.h"
-#include "gui.h"
+#include "vol_renderer/common.h"
+#include "vol_renderer/obj.h"
+#include "vol_renderer/camera.h"
+#include "vol_renderer/shader.h"
+#include "vol_renderer/gui.h"
 
 // Main window
 GLFWwindow* window = nullptr;
@@ -51,8 +51,7 @@ int main() {
 
     // Initialize OpenGL state and mesh data
     // Set background color
-    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-    glEnable(GL_DEPTH_TEST);
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     // load mesh
     std::vector<glm::vec3> vertices;
     std::vector<GLuint> faces;
@@ -87,14 +86,14 @@ int main() {
     Timer timer;
     // Main loop
     while (!glfwWindowShouldClose(window)) {
-
+        glfwPollEvents();
         // per-frame time logic
         float delta_time = timer.getDeltaTime();
         timer.update();
         gui.process_input(delta_time);
 
-        // Clear the color and depth buffers
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        // Clear the color buffers
+        glClear(GL_COLOR_BUFFER_BIT);
 
         shader.use();
 
@@ -116,13 +115,13 @@ int main() {
 
         // Swap buffers
         glfwSwapBuffers(window);
-        glfwPollEvents();
     }
 
     // Clean up
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
     glDeleteBuffers(1, &EBO);
+    glfwDestroyWindow(window);
     glfwTerminate();
     return 0;
 }

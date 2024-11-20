@@ -1,4 +1,5 @@
-#include "gui.h"
+#include "vol_renderer/gui.h"
+#include "vol_renderer/common.h"
 
 float lastX = WIDTH / 2.0f;
 float lastY = HEIGHT / 2.0f;

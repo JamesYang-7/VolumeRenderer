@@ -1,7 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-#include "obj.h"
+#include "vol_renderer/obj.h"
 
 // Function to read a mesh from an OBJ file
 bool readOBJ(const std::string& filename, std::vector<glm::vec3>& vertices, std::vector<GLuint>& faces) {

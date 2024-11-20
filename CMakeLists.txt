@@ -200,8 +200,26 @@ list(APPEND VOLRENDERER_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glfw/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/glm"
     "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/imgui"
+	"${CMAKE_CURRENT_SOURCE_DIR}/dependencies/imgui/backends"
     ${CUDA_INCLUDE_DIRS}
 )
+
+# imgui
+list(APPEND IMGUI_SOURCES
+	"${CMAKE_CURRENT_SOURCE_DIR}/dependencies/imgui/imgui.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/dependencies/imgui/backends/imgui_impl_glfw.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/dependencies/imgui/backends/imgui_impl_opengl3.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/dependencies/imgui/imgui_draw.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/dependencies/imgui/imgui_tables.cpp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/dependencies/imgui/imgui_widgets.cpp"
+)
+list(APPEND IMGUI_INCLUDE_DIRS
+	"${CMAKE_CURRENT_SOURCE_DIR}/dependencies/imgui"
+	"${CMAKE_CURRENT_SOURCE_DIR}/dependencies/imgui/backends"
+)
+add_library(imgui ${IMGUI_SOURCES})
+target_include_directories(imgui PRIVATE ${IMGUI_INCLUDE_DIRS})
+target_link_libraries(imgui PRIVATE glfw)
 
 list(APPEND VOLRENDERER_GL_LIBRARIES
     libglew_static
@@ -232,3 +250,7 @@ target_link_libraries(texture_renderer PRIVATE ${VOLRENDERER_GL_LIBRARIES})
 add_executable(hello_world_cuda src/hello_world_cuda.cu)
 target_include_directories(hello_world_cuda PRIVATE ${VOLRENDERER_INCLUDE_DIRS})
 target_link_libraries(hello_world_cuda PRIVATE ${VOLRENDERER_LINK_LIBRARIES})
+
+add_executable(hello_gui src/hello_gui.cpp)
+target_include_directories(hello_gui PRIVATE ${VOLRENDERER_INCLUDE_DIRS})
+target_link_libraries(hello_gui PRIVATE ${VOLRENDERER_GL_LIBRARIES} imgui)
