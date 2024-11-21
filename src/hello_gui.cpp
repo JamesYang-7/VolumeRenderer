@@ -3,9 +3,9 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
-#include "imgui.h"
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_opengl3.h"
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
 #include "vol_renderer/common.h"
 #include "vol_renderer/shader.h"
 
@@ -42,7 +42,6 @@ int main() {
 
     // Set background color
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-    glEnable(GL_DEPTH_TEST);
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();

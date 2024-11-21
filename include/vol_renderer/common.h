@@ -1,8 +1,9 @@
 #pragma once
 
 #include <string>
+#include <GL/glew.h>
 
-const unsigned int WIDTH = 800;
-const unsigned int HEIGHT = 600;
+const GLuint WIDTH = 800;
+const GLuint HEIGHT = 600;
 
 std::string readFile(const std::string& filePath);
