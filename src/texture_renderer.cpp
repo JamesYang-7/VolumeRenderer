@@ -4,7 +4,7 @@
 #include <fstream>
 #include <vector>
 #include "vol_renderer/common.h"
-#include "vol_renderer/camera.h"
+#include "vol_renderer/camera_gl.h"
 #include "vol_renderer/shader.h"
 #include "vol_renderer/gui.h"
 
@@ -12,7 +12,7 @@
 GLFWwindow* window = nullptr;
 
 // camera
-Camera main_camera(glm::vec3(0.0f, 0.0f, 3.0f));
+GLCamera main_camera(glm::vec3(0.0f, 0.0f, 3.0f));
 
 std::string vertexShaderFile = "../shaders/texture.vs";
 std::string fragmentShaderFile = "../shaders/texture.frag";
@@ -85,14 +85,11 @@ int main() {
     GLuint VAO, VBO;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
-
     glBindVertexArray(VAO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (GLvoid*)0);
     glEnableVertexAttribArray(0);
-
     glBindVertexArray(0);
 
     // Compile and link shaders
@@ -130,7 +127,6 @@ int main() {
         glClear(GL_COLOR_BUFFER_BIT);
 
         shader.use();
-        glBindTexture(GL_TEXTURE_2D, texture);
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixelData.data());
         glBindVertexArray(VAO);
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);

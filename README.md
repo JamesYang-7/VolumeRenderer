@@ -10,6 +10,7 @@ git clone --recursive https://github.com/JamesYang-7/VolumeRenderer.git
 #### Requirements
 - CMake 3.23 or higher
 - Ninja
+- CUDA 12.x (CUDA Toolkit)
 
 #### Command Line
 On Windows, this should be done in a Developer Command Prompt. First install VS2022

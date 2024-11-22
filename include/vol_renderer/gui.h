@@ -2,10 +2,10 @@
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
-#include "vol_renderer/camera.h"
+#include "vol_renderer/camera_gl.h"
 
 // Window dimensions
-extern Camera main_camera;
+extern GLCamera main_camera;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);

@@ -5,14 +5,14 @@
 #include <vector>
 #include "vol_renderer/common.h"
 #include "vol_renderer/obj.h"
-#include "vol_renderer/camera.h"
+#include "vol_renderer/camera_gl.h"
 #include "vol_renderer/shader.h"
 #include "vol_renderer/gui.h"
 
 // Main window
 GLFWwindow* window = nullptr;
 // camera
-Camera main_camera(glm::vec3(0.0f, 0.0f, 3.0f));
+GLCamera main_camera(glm::vec3(0.0f, 0.0f, 3.0f));
 
 std::string vertexShaderFile = "../shaders/mesh.vs";
 std::string fragmentShaderFile = "../shaders/mesh.frag";
