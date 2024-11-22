@@ -25,20 +25,51 @@ __global__ void processTextureKernel(uchar4* frame_buffer, uint32_t width, uint3
     frame_buffer[idx].z = 127;
 }
 
+__device__ void composite(
+    const glm::vec3& color,
+    const float& alpha,
+    const glm::vec3& bg_color,
+    const float& bg_alpha,
+    glm::vec3& out_color,
+    float& out_alpha
+)
+{
+    out_color = alpha * color + (1.0f - alpha) * bg_color;
+    out_alpha = alpha + (1.0f - alpha) * bg_alpha;
+}
+
 __global__ void rayTracingKernel(uchar4* frame_buffer, uint32_t width, uint32_t height, const Camera* camera, const AABB* bbox) {
     uint32_t x = blockIdx.x * blockDim.x + threadIdx.x;
     uint32_t y = blockIdx.y * blockDim.y + threadIdx.y;
     if (x >= width || y >= height) return;
     uint32_t idx = y * width + x;
 
-    float u = (float)x / width;
-    float v = (float)y / height;
+    float u = ((float)x + 0.5f) / width;
+    float v = ((float)y + 0.5f) / height;
 
     Ray ray = camera->generateRay(u, v);
     float tmin, tmax;
-    unsigned char r = 255, g = 0, b = 255;
+    float step_size = 0.1f;
+    
+    glm::vec3 color(0.0f, 0.0f, 0.5f);
+    float alpha = 0.2f;
+    glm::vec3 bg_color(0.0f);
+    float bg_alpha = 0.0f;
+    glm::vec3 out_color(0.0f);
+    float out_alpha = 0.0f;
+    unsigned char r = 0, g = 0, b = 0;
     if (bbox->ray_intersect(&ray, &tmin, &tmax)) {
-        g = 255;
+        float t = tmax;
+        while (t > tmin) {
+            glm::vec3 p = ray.at(t);
+            composite(color, alpha, bg_color, bg_alpha, out_color, out_alpha);
+            bg_color = out_color;
+            bg_alpha = out_alpha;
+            t -= step_size;
+        }
+        r = (unsigned char)(255.0f * out_color.x);
+        g = (unsigned char)(255.0f * out_color.y);
+        b = (unsigned char)(255.0f * out_color.z);
     }
     frame_buffer[idx].x = r;
     frame_buffer[idx].y = g;
@@ -169,7 +200,7 @@ int main() {
 
     // scene
     AABB bbox(glm::vec3(-1.0f), glm::vec3(1.0f));
-    glm::vec3 eye(5.0f, 0.0f, 0.0f);
+    glm::vec3 eye(2.0f, 2.0f, -2.0f);
     glm::vec3 center(0.0f, 0.0f, 0.0f);
     glm::vec3 up(0.0f, 0.0f, 1.0f);
     Camera camera(eye, center - eye, up);
@@ -214,7 +245,6 @@ int main() {
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 
-    // glDeleteTextures(1, &renderer.gl_texture_id);
     glfwDestroyWindow(window);
     glfwTerminate();
     return 0;
