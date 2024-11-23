@@ -88,26 +88,6 @@ list(APPEND VOLRENDERER_SOURCES
 # Targets
 ###############################################################################
 
-# add_executable(mesh_renderer src/mesh_renderer.cpp src/obj.cpp src/gui.cpp)
-# target_include_directories(mesh_renderer PRIVATE ${VOLRENDERER_INCLUDE_DIRS})
-# target_link_libraries(mesh_renderer PRIVATE ${VOLRENDERER_LINK_LIBRARIES})
-
-# add_executable(device_test src/device_test.cpp)
-# target_include_directories(device_test PRIVATE ${VOLRENDERER_INCLUDE_DIRS})
-# target_link_libraries(device_test PRIVATE ${VOLRENDERER_LINK_LIBRARIES})
-
-# add_executable(texture_renderer src/texture_renderer.cpp src/gui.cpp)
-# target_include_directories(texture_renderer PRIVATE ${VOLRENDERER_INCLUDE_DIRS})
-# target_link_libraries(texture_renderer PRIVATE ${VOLRENDERER_LINK_LIBRARIES})
-
-# add_executable(hello_world_cuda src/hello_world_cuda.cu)
-# target_include_directories(hello_world_cuda PRIVATE ${VOLRENDERER_INCLUDE_DIRS})
-# target_link_libraries(hello_world_cuda PRIVATE ${VOLRENDERER_LINK_LIBRARIES})
-
-# add_executable(hello_gui src/hello_gui.cpp)
-# target_include_directories(hello_gui PRIVATE ${VOLRENDERER_INCLUDE_DIRS})
-# target_link_libraries(hello_gui PRIVATE ${VOLRENDERER_LINK_LIBRARIES})
-
 add_executable(vol_renderer ${VOLRENDERER_SOURCES})
 set_target_properties(vol_renderer PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 target_include_directories(vol_renderer PRIVATE ${VOLRENDERER_INCLUDE_DIRS})
