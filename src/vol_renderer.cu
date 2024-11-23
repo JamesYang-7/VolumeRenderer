@@ -32,6 +32,10 @@ __global__ void processTextureKernel(uchar4* frame_buffer, uint32_t width, uint3
     frame_buffer[idx].z = 127;
 }
 
+__global__ void createTransferFunctions(GrayScaleTransferFunction** tf) {
+    *tf = new GrayScaleTransferFunction();
+}
+
 __device__ void composite(
     const glm::vec3& color,
     const float& alpha,
@@ -71,6 +75,7 @@ __global__ void rayTracingKernel(uchar4* frame_buffer, uint32_t width, uint32_t 
             glm::vec3 p = ray.at(t);
             glm::vec3 local_pos = bbox->getLocalPos(p);
             float val = volume->at(local_pos);
+            // glm::vec4 rgba = tf->getColor(val);
             glm::vec4 rgba = getColor(val);
             color = glm::vec3(rgba.x, rgba.y, rgba.z);
             alpha = rgba.w;
@@ -97,6 +102,7 @@ struct VolumeRenderer {
     cudaSurfaceObject_t surface_obj;
     uchar4* frame_buffer;
     size_t size;
+    // TransferFunction* tf;
 
     VolumeRenderer(uint32_t res_x, uint32_t res_y) : res_x(res_x), res_y(res_y) {
         size = res_x * res_y * sizeof(uchar4);
@@ -117,6 +123,10 @@ struct VolumeRenderer {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         cudaGraphicsGLRegisterImage(&cuda_resource, gl_texture_id, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsSurfaceLoadStore);
     }
+
+    // void setTransferFunction(TransferFunction** tf) {
+    //     this->tf = tf[0];
+    // }
 
     void renderTexture() {
         cudaArray* array;
@@ -214,12 +224,15 @@ int main() {
     ImVec2 CONFIG_WINDOW_POS = ImVec2(VIS_WIDTH, 0);
     ImVec2 CONFIG_WINDOW_SIZE = ImVec2(CONFIG_WIDTH, HEIGHT);
 
-    // scene
-    // AABB bbox(glm::vec3(-1.0f), glm::vec3(1.0f));
+    // Camera
     glm::vec3 eye(0.5f, 0.5f, 0.5f);
     glm::vec3 center(0.0f, 0.0f, 0.0f);
-    glm::vec3 up(0.0f, 0.0f, 1.0f);
-    Camera camera(eye, center - eye, up, YAW, PITCH, FOV, float(VIS_WIDTH) / HEIGHT);
+    glm::vec3 up(0.0f, 1.0f, 0.0f);
+    float phi = 0.0f;
+    float theta = 0.0f;
+    float radius = CAMERA_RADIUS;
+    float camera_speed = CAMERA_SPEED;
+
     // load volume data
     DataLoader loader("../data/MRbrain.bin", true);
     glm::vec3 voxel_ratio(1.0f, 1.0f, 2.0f);
@@ -243,7 +256,12 @@ int main() {
     // move volume to the center
     AABB bbox(-volume_shape / 2.0f, volume_shape / 2.0f);
 
-    glfwSetWindowUserPointer(window, &camera);
+    // glfwSetWindowUserPointer(window, &camera);
+    // TransferFunction* tf = new SkullTransferFunction();
+    GrayScaleTransferFunction** d_tf;
+    cudaMalloc(&d_tf, sizeof(GrayScaleTransferFunction*));
+    createTransferFunctions<<<1, 1>>>(d_tf);
+    CUDA_CHECK_THROW(cudaDeviceSynchronize());
 
     // Main loop
     Timer timer;
@@ -252,8 +270,18 @@ int main() {
 
         // Calculate delta time
         float deltaTime = timer.getDeltaTime();
-        timer.update();
-
+        if (deltaTime > 0.033f) {
+            // Update the camera
+            theta = theta + camera_speed * deltaTime;
+            theta = theta > 360.0f ? theta - 360.0f : theta;
+            eye = radius * glm::vec3(-cos(glm::radians(phi)) * cos(glm::radians(theta)),
+                            sin(glm::radians(phi)),
+                            cos(glm::radians(phi)) * sin(glm::radians(theta))
+                            );
+            timer.update();
+        }
+        
+        Camera camera(eye, center - eye, up, YAW, PITCH, FOV, float(VIS_WIDTH) / HEIGHT);
         renderer.render(camera, bbox, d_volume);
 
         // Start the Dear ImGui frame
