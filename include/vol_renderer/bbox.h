@@ -22,7 +22,5 @@ struct AABB {
 
     __host__ __device__ bool isect() const;
 
-    __host__ __device__ bool min_less_than_zero(const Ray* ray) const;
-
-    __host__ __device__ void pointer_test(float* out);
+    __host__ __device__ glm::vec3 getLocalPos(const glm::vec3& pos) const;
 };

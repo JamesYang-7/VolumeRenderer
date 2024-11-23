@@ -7,12 +7,19 @@
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
+#include <tiny-cuda-nn/common_host.h>
 #include "vol_renderer/common.h"
 #include "vol_renderer/camera.h"
 #include "vol_renderer/ray.h"
 #include "vol_renderer/bbox.h"
-#include <tiny-cuda-nn/common_host.h>
+#include "vol_renderer/volume_data.h"
+#include "vol_renderer/data_loader.h"
+#include "vol_renderer/transfer_function.h"
+#include "vol_renderer/timer.h"
 
+
+const GLuint VIS_WIDTH = 600;
+const GLuint CONFIG_WIDTH = WIDTH - VIS_WIDTH;
 
 __global__ void processTextureKernel(uchar4* frame_buffer, uint32_t width, uint32_t height) {
     uint32_t x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -38,7 +45,7 @@ __device__ void composite(
     out_alpha = alpha + (1.0f - alpha) * bg_alpha;
 }
 
-__global__ void rayTracingKernel(uchar4* frame_buffer, uint32_t width, uint32_t height, const Camera* camera, const AABB* bbox) {
+__global__ void rayTracingKernel(uchar4* frame_buffer, uint32_t width, uint32_t height, const Camera* camera, const AABB* bbox, const VolumeData<float>* volume) {
     uint32_t x = blockIdx.x * blockDim.x + threadIdx.x;
     uint32_t y = blockIdx.y * blockDim.y + threadIdx.y;
     if (x >= width || y >= height) return;
@@ -49,7 +56,7 @@ __global__ void rayTracingKernel(uchar4* frame_buffer, uint32_t width, uint32_t 
 
     Ray ray = camera->generateRay(u, v);
     float tmin, tmax;
-    float step_size = 0.1f;
+    float step_size = 0.01f;
     
     glm::vec3 color(0.0f, 0.0f, 0.5f);
     float alpha = 0.2f;
@@ -62,6 +69,11 @@ __global__ void rayTracingKernel(uchar4* frame_buffer, uint32_t width, uint32_t 
         float t = tmax;
         while (t > tmin) {
             glm::vec3 p = ray.at(t);
+            glm::vec3 local_pos = bbox->getLocalPos(p);
+            float val = volume->at(local_pos);
+            glm::vec4 rgba = getColor(val);
+            color = glm::vec3(rgba.x, rgba.y, rgba.z);
+            alpha = rgba.w;
             composite(color, alpha, bg_color, bg_alpha, out_color, out_alpha);
             bg_color = out_color;
             bg_alpha = out_alpha;
@@ -121,7 +133,7 @@ struct VolumeRenderer {
         cudaGraphicsUnmapResources(1, &cuda_resource);
     }
 
-    void render(const Camera& camera, const AABB& bbox) {
+    void render(const Camera& camera, const AABB& bbox, const VolumeData<float>* d_volume) {
         cudaArray* array;
         cudaGraphicsMapResources(1, &cuda_resource);
         cudaGraphicsSubResourceGetMappedArray(&array, cuda_resource, 0, 0);
@@ -135,7 +147,7 @@ struct VolumeRenderer {
         cudaMalloc(&d_bbox, sizeof(AABB));
         cudaMemcpy(d_camera, &camera, sizeof(Camera), cudaMemcpyHostToDevice);
         cudaMemcpy(d_bbox, &bbox, sizeof(AABB), cudaMemcpyHostToDevice);
-        rayTracingKernel<<<numBlocks, blockSize>>>(frame_buffer, res_x, res_y, d_camera, d_bbox);
+        rayTracingKernel<<<numBlocks, blockSize>>>(frame_buffer, res_x, res_y, d_camera, d_bbox, d_volume);
         cudaDeviceSynchronize();
         cudaMemcpyToArray(array, 0, 0, frame_buffer, size, cudaMemcpyDeviceToDevice);
         cudaGraphicsUnmapResources(1, &cuda_resource);
@@ -164,6 +176,7 @@ GLFWwindow* createWindow(int width, int height, const char* title) {
         return nullptr;
     }
     glfwMakeContextCurrent(window);
+    glfwSwapInterval(0); // Disable VSync
 
     // Initialize GLEW
     glewExperimental = GL_TRUE;
@@ -176,7 +189,7 @@ GLFWwindow* createWindow(int width, int height, const char* title) {
 
 int main() {
     
-    GLFWwindow*  window = createWindow(WIDTH, HEIGHT, "Volume Renderer");
+    GLFWwindow* window = createWindow(WIDTH, HEIGHT, "Volume Renderer");
     if (window == nullptr) {
         return -1;
     }
@@ -191,46 +204,75 @@ int main() {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
 
-    VolumeRenderer renderer(WIDTH, HEIGHT);
+    VolumeRenderer renderer(VIS_WIDTH, HEIGHT);
     renderer.init();
 
     const char* VIS_WINDOW_NAME = "Volume";
     ImVec2 VIS_WINDOW_POS = ImVec2(0, 0);
-    ImVec2 VIS_WINDOW_SIZE = ImVec2(WIDTH, HEIGHT);
+    ImVec2 VIS_WINDOW_SIZE = ImVec2(VIS_WIDTH, HEIGHT);
+    const char* CONFIG_WINDOW_NAME = "Settings";
+    ImVec2 CONFIG_WINDOW_POS = ImVec2(VIS_WIDTH, 0);
+    ImVec2 CONFIG_WINDOW_SIZE = ImVec2(CONFIG_WIDTH, HEIGHT);
 
     // scene
-    AABB bbox(glm::vec3(-1.0f), glm::vec3(1.0f));
-    glm::vec3 eye(2.0f, 2.0f, -2.0f);
+    // AABB bbox(glm::vec3(-1.0f), glm::vec3(1.0f));
+    glm::vec3 eye(0.5f, 0.5f, 0.5f);
     glm::vec3 center(0.0f, 0.0f, 0.0f);
     glm::vec3 up(0.0f, 0.0f, 1.0f);
-    Camera camera(eye, center - eye, up);
+    Camera camera(eye, center - eye, up, YAW, PITCH, FOV, float(VIS_WIDTH) / HEIGHT);
+    // load volume data
+    DataLoader loader("../data/MRbrain.bin", true);
+    glm::vec3 voxel_ratio(1.0f, 1.0f, 2.0f);
+    VolumeData<float> volume(loader.getData(), loader.getSize(), voxel_ratio);
+    float* d_volume_data;
+    Voxel* d_voxels;
+    cudaMalloc(&d_volume_data, loader.getNum() * sizeof(float));
+    cudaMalloc(&d_voxels, volume.getNum() * sizeof(Voxel));
+    cudaMemcpy(d_volume_data, loader.getData(), loader.getNum() * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_voxels, volume.getVoxels(), volume.getNum() * sizeof(Voxel), cudaMemcpyHostToDevice);
+    VolumeData<float>* d_volume;
+    volume.setData(d_volume_data);
+    volume.setVoxels(d_voxels);
+    cudaMalloc(&d_volume, sizeof(VolumeData<float>));
+    cudaMemcpy(d_volume, &volume, sizeof(VolumeData<float>), cudaMemcpyHostToDevice);
+
+    // set volume within [0, 1]^3
+    glm::vec3 volume_shape = glm::vec3(volume.getShape()) * voxel_ratio;
+    float max_dim = std::max(volume_shape.x, std::max(volume_shape.y, volume_shape.z));
+    volume_shape /= max_dim;
+    // move volume to the center
+    AABB bbox(-volume_shape / 2.0f, volume_shape / 2.0f);
+
+    glfwSetWindowUserPointer(window, &camera);
 
     // Main loop
-    float currentTime = 0.0f;
-    float deltaTime = 0.0f;
-    float lastTime = 0.0f;
+    Timer timer;
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
 
         // Calculate delta time
-        currentTime = glfwGetTime();
-        deltaTime = currentTime - lastTime;
-        if (deltaTime < 0.5f) continue;
-        lastTime = currentTime;
+        float deltaTime = timer.getDeltaTime();
+        timer.update();
 
-        renderer.render(camera, bbox);
+        renderer.render(camera, bbox, d_volume);
 
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        // glBindTexture(GL_TEXTURE_2D, texture);
         ImGui::SetWindowPos(VIS_WINDOW_NAME, VIS_WINDOW_POS);
         ImGui::SetWindowSize(VIS_WINDOW_NAME, VIS_WINDOW_SIZE);
         ImGui::Begin(VIS_WINDOW_NAME);
-        ImGui::Image(renderer.gl_texture_id, ImVec2(WIDTH, HEIGHT));
+        ImGui::Image(renderer.gl_texture_id, VIS_WINDOW_SIZE);
         ImGui::End();
+
+        ImGui::SetWindowPos(CONFIG_WINDOW_NAME, CONFIG_WINDOW_POS);
+        ImGui::SetWindowSize(CONFIG_WINDOW_NAME, CONFIG_WINDOW_SIZE);
+        ImGui::Begin(CONFIG_WINDOW_NAME);
+        ImGui::Text("%.2f FPS", io.Framerate);
+        ImGui::End();
+
         ImGui::Render();
 
         glClear(GL_COLOR_BUFFER_BIT);
@@ -241,6 +283,11 @@ int main() {
     }
 
     // Clean up
+
+    cudaFree(d_volume_data);
+    cudaFree(d_voxels);
+    cudaFree(d_volume);
+
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();

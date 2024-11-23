@@ -15,10 +15,9 @@ void DataLoader::normalize() {
     for (size_t i = 0; i < raw_data.size(); ++i) {
         data[i] = (raw_data[i] - min) / (max - min);
     }
-    printf("max: %f, min: %f\n", max, min);
 }
 
-void DataLoader::loadData(const std::string& filePath) {
+void DataLoader::loadData(const std::string& filePath, bool changeEndian) {
     std::ifstream file(filePath, std::ios::binary);
     if (!file) {
         throw std::runtime_error("Failed to open file: " + filePath);
@@ -32,13 +31,28 @@ void DataLoader::loadData(const std::string& filePath) {
         throw std::runtime_error("File size is not a multiple of 16-bit integers");
     }
 
-    raw_data.resize(size / sizeof(uint16_t));
-    if (!file.read(reinterpret_cast<char*>(raw_data.data()), size)) {
+    size_t data_size = size / sizeof(uint16_t) - 3;
+    uint16_t size_x, size_y, size_z;
+    file.read(reinterpret_cast<char*>(&size_x), sizeof(uint16_t));
+    file.read(reinterpret_cast<char*>(&size_y), sizeof(uint16_t));
+    file.read(reinterpret_cast<char*>(&size_z), sizeof(uint16_t));
+
+    raw_data.resize(data_size);
+    if (!file.read(reinterpret_cast<char*>(raw_data.data()), size - 3 * sizeof(uint16_t))) {
         throw std::runtime_error("Failed to read data from file: " + filePath);
     }
-
-    for (auto& value : raw_data) {
-        value = swapEndian(value);
+    
+    if (changeEndian) {
+        size_x = swapEndian(size_x);
+        size_y = swapEndian(size_y);
+        size_z = swapEndian(size_z);
+        for (auto& value : raw_data) {
+            value = swapEndian(value);
+        }
     }
+    m_size.x = static_cast<uint32_t>(size_x);
+    m_size.y = static_cast<uint32_t>(size_y);
+    m_size.z = static_cast<uint32_t>(size_z);
+    
     normalize();
 }

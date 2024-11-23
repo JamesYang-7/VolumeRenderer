@@ -6,13 +6,10 @@
 #include "vol_renderer/common.h"
 #include "vol_renderer/camera_gl.h"
 #include "vol_renderer/shader.h"
-#include "vol_renderer/gui.h"
+#include "vol_renderer/timer.h"
 
 // Main window
 GLFWwindow* window = nullptr;
-
-// camera
-GLCamera main_camera(glm::vec3(0.0f, 0.0f, 3.0f));
 
 std::string vertexShaderFile = "shaders/texture.vs";
 std::string fragmentShaderFile = "shaders/texture.frag";
@@ -44,9 +41,6 @@ int main() {
         std::cerr << "Failed to initialize GLEW" << std::endl;
         return -1;
     }
-
-    GUI gui(window);
-    gui.init();
 
     // Set background color
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
@@ -104,7 +98,6 @@ int main() {
         glfwPollEvents();
         // per-frame time logic
         float delta_time = timer.getDeltaTime();
-        gui.process_input(delta_time);
         if (delta_time < 0.05f) continue;
         timer.update();
 

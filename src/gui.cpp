@@ -6,10 +6,12 @@ float lastY = HEIGHT / 2.0f;
 bool firstMouse = true;
 
 GUI::GUI(GLFWwindow* window) : window(window) {
+    init();
 }
 
 void GUI::init()
 {
+    camera = static_cast<GLCamera*>(glfwGetWindowUserPointer(window));
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
@@ -22,17 +24,24 @@ void GUI::process_input(float deltaTime)
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        main_camera.ProcessKeyboard(FORWARD, deltaTime);
+        camera->ProcessKeyboard(FORWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        main_camera.ProcessKeyboard(BACKWARD, deltaTime);
+        camera->ProcessKeyboard(BACKWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        main_camera.ProcessKeyboard(LEFT, deltaTime);
+        camera->ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        main_camera.ProcessKeyboard(RIGHT, deltaTime);
+        camera->ProcessKeyboard(RIGHT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
-        main_camera.ProcessKeyboard(UP, deltaTime);
+        camera->ProcessKeyboard(UP, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
-        main_camera.ProcessKeyboard(DOWN, deltaTime);
+        camera->ProcessKeyboard(DOWN, deltaTime);
+}
+
+void GUI::process_input()
+{
+    float deltaTime = timer.getDeltaTime();
+    timer.update();
+    process_input(deltaTime);
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
@@ -57,24 +66,13 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 
     lastX = xpos;
     lastY = ypos;
-
-    main_camera.ProcessMouseMovement(xoffset, yoffset);
+    GLCamera* camera = static_cast<GLCamera*>(glfwGetWindowUserPointer(window));
+    if (camera) camera->ProcessMouseMovement(xoffset, yoffset);
 }
 
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
-    main_camera.ProcessMouseScroll(static_cast<float>(yoffset));
-}
-
-float Timer::getDeltaTime()
-{
-    currentFrame = static_cast<float>(glfwGetTime());
-    float deltaTime = currentFrame - lastFrame;
-    return deltaTime;
-}
-
-void Timer::update()
-{
-    lastFrame = currentFrame;
+    GLCamera* camera = static_cast<GLCamera*>(glfwGetWindowUserPointer(window));
+    if (camera) camera->ProcessMouseScroll(static_cast<float>(yoffset));
 }

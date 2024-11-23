@@ -46,6 +46,7 @@ int main() {
     }
 
     // Set callbacks
+    glfwSetWindowUserPointer(window, &main_camera);
     GUI gui(window);
     gui.init();
 
@@ -83,14 +84,11 @@ int main() {
     // Use the shader program
     shader.use();
 
-    Timer timer;
     // Main loop
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         // per-frame time logic
-        float delta_time = timer.getDeltaTime();
-        timer.update();
-        gui.process_input(delta_time);
+        gui.process_input();
 
         // Clear the color buffers
         glClear(GL_COLOR_BUFFER_BIT);

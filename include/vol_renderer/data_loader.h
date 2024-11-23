@@ -5,26 +5,36 @@
 #include <fstream>
 #include <stdexcept>
 #include <cstdint>
+#include <glm/glm.hpp>
 
 class DataLoader {
 public:
-    DataLoader(const std::string& filePath) {
-        loadData(filePath);
+    DataLoader(const std::string& filePath, bool changeEndian = false) {
+        loadData(filePath, changeEndian);
     }
 
-    const std::vector<float>& getData() const {
-        return data;
+    const float* getData() const {
+        return data.data();
     }
 
-    const std::vector<uint16_t>& getRawData() const {
-        return raw_data;
+    const uint16_t* getRawData() const {
+        return raw_data.data();
     }
 
     void normalize();
 
+    glm::uvec3 getSize() const {
+        return m_size;
+    }
+
+    uint32_t getNum() const {
+        return m_size.x * m_size.y * m_size.z;
+    }
+
 private:
     std::vector<uint16_t> raw_data;
     std::vector<float> data;
+    glm::uvec3 m_size;
 
-    void loadData(const std::string& filePath);
+    void loadData(const std::string& filePath, bool changeEndian = false);
 };

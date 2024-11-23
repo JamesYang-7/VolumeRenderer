@@ -1,24 +1,16 @@
 #include "vol_renderer/data_loader.h"
 #include <stdio.h>
+#include <algorithm>
+#include <glm/glm.hpp>
 
 int main() {
-    DataLoader loader("F:\\Code\\volume_renderer\\data\\MRbrain\\MRbrain.1");
-    const std::vector<float>& data = loader.getData();
-    printf("Data size: %zu\n", data.size());
-    std::ofstream outFile("output.csv");
-    if (outFile.is_open()) {
-        for (size_t i = 0; i < data.size(); ++i) {
-            outFile << data[i];
-            if ((i + 1) % 256 == 0) {
-                outFile << "\n";
-            } else {
-                outFile << ",";
-            }
-        }
-        outFile.close();
-        printf("Data written to output.csv\n");
-    } else {
-        printf("Failed to open output.csv\n");
-    }
+    DataLoader loader("../../../data/MRbrain.bin", true);
+    glm::uvec3 size = loader.getSize();
+    printf("Data shape: (%u, %u, %u)\n", size.x, size.y, size.z);
+    printf("Data size: %u\n", size.x * size.y * size.z);
+    uint16_t min = *std::min_element(loader.getRawData(), loader.getRawData() + size.x * size.y * size.z);
+    uint16_t max = *std::max_element(loader.getRawData(), loader.getRawData() + size.x * size.y * size.z);
+    printf("Raw data min: %u\n", min);
+    printf("Raw data max: %u\n", max);
     return 0;
 }

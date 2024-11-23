@@ -82,6 +82,8 @@ list(APPEND VOLRENDERER_SOURCES
 	src/vol_renderer.cu
 	src/camera.cu
 	src/bbox.cu
+	src/data_loader.cpp
+	src/volume_data.cu
 )
 
 ###############################################################################
