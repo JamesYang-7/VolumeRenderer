@@ -6,4 +6,4 @@
 const GLuint WIDTH = 800;
 const GLuint HEIGHT = 600;
 
-std::string readFile(const std::string& filePath);
+// std::string readFile(const std::string& filePath);

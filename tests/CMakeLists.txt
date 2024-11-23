@@ -1,0 +1,6 @@
+add_subdirectory("data_loader")
+add_subdirectory("device_test")
+add_subdirectory("hello_gui")
+add_subdirectory("hello_world_cuda")
+add_subdirectory("mesh_renderer")
+add_subdirectory("texture_renderer")
