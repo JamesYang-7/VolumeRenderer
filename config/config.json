@@ -1,0 +1,10 @@
+{
+    "WIDTH": 1000,
+    "HEIGHT": 600,
+    "VIS_WIDTH": 600,
+    "CAMERA_RADIUS": 0.7,
+    "CAMERA_SPEED": 90.0,
+    "CAMERA_UP": [0.0, 0.0, 1.0],
+    "DATA_PATH": "../data/CThead.bin",
+    "USE_CPU": false
+}

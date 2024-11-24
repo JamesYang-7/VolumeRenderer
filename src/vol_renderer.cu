@@ -8,7 +8,7 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 #include <tiny-cuda-nn/common_host.h>
-#include "vol_renderer/common.h"
+#include <json/json.hpp>
 #include "vol_renderer/camera.h"
 #include "vol_renderer/ray.h"
 #include "vol_renderer/bbox.h"
@@ -16,6 +16,8 @@
 #include "vol_renderer/data_loader.h"
 #include "vol_renderer/transfer_function.h"
 #include "vol_renderer/timer.h"
+
+using json = nlohmann::json;
 
 
 __global__ void processTextureKernel(uchar4* frame_buffer, uint32_t width, uint32_t height) {
@@ -246,7 +248,7 @@ GLFWwindow* createWindow(int width, int height, const char* title) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // Create window
-    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Hello GUI", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(width, height, "Hello GUI", nullptr, nullptr);
     if (!window) {
         std::cerr << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
@@ -265,6 +267,15 @@ GLFWwindow* createWindow(int width, int height, const char* title) {
 } 
 
 int main() {
+    std::ifstream config_file("../config/config.json");
+    json args = json::parse(config_file);
+    uint32_t WIDTH = args["WIDTH"].get<uint32_t>();
+    uint32_t HEIGHT = args["HEIGHT"].get<uint32_t>();
+    uint32_t VIS_WIDTH = args["VIS_WIDTH"].get<uint32_t>();
+    uint32_t CONFIG_WIDTH = WIDTH - VIS_WIDTH;
+    float CAMERA_RADIUS = args["CAMERA_RADIUS"].get<float>();
+    float CAMERA_SPEED = args["CAMERA_SPEED"].get<float>();
+    bool USE_CPU = args["USE_CPU"].get<bool>();
     
     GLFWwindow* window = createWindow(WIDTH, HEIGHT, "Volume Renderer");
     if (window == nullptr) {
@@ -294,14 +305,14 @@ int main() {
     // Camera
     glm::vec3 eye(-1.0f, 0.0f, 0.0f);
     glm::vec3 center(0.0f, 0.0f, 0.0f);
-    glm::vec3 up(0.0f, 0.0f, 1.0f);
+    glm::vec3 up = glm::vec3(args["CAMERA_UP"][0].get<float>(), args["CAMERA_UP"][1].get<float>(), args["CAMERA_UP"][2].get<float>());
     float phi = 0.0f;
     float theta = 0.0f;
     float radius = CAMERA_RADIUS;
     float camera_speed = CAMERA_SPEED;
 
     // load volume data
-    DataLoader loader("../data/CThead.bin", true);
+    DataLoader loader(std::string(args["DATA_PATH"]), true);
     glm::vec3 voxel_ratio(1.0f, 1.0f, 2.0f);
     VolumeData<float> volume(loader.getData(), loader.getSize(), voxel_ratio);
     const float* h_volume_data = loader.getData();
