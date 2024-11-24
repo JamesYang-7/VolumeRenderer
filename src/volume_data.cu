@@ -65,7 +65,7 @@ __host__ __device__ T VolumeData<T>::at(const glm::vec3& pos) const {
         (pos.x - x * m_voxel_size.x) / m_voxel_size.x,
         (pos.y - y * m_voxel_size.y) / m_voxel_size.y,
         (pos.z - z * m_voxel_size.z) / m_voxel_size.z
-    ); 
+    );
     return trilinear_interpolation<T>(data, voxels[voxel_index], local_pos);
 }
 

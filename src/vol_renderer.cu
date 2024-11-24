@@ -18,9 +18,6 @@
 #include "vol_renderer/timer.h"
 
 
-const GLuint VIS_WIDTH = 600;
-const GLuint CONFIG_WIDTH = WIDTH - VIS_WIDTH;
-
 __global__ void processTextureKernel(uchar4* frame_buffer, uint32_t width, uint32_t height) {
     uint32_t x = blockIdx.x * blockDim.x + threadIdx.x;
     uint32_t y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -32,11 +29,7 @@ __global__ void processTextureKernel(uchar4* frame_buffer, uint32_t width, uint3
     frame_buffer[idx].z = 127;
 }
 
-__global__ void createTransferFunctions(GrayScaleTransferFunction** tf) {
-    *tf = new GrayScaleTransferFunction();
-}
-
-__device__ void composite(
+__host__ __device__ void composite(
     const glm::vec3& color,
     const float& alpha,
     const glm::vec3& bg_color,
@@ -49,7 +42,15 @@ __device__ void composite(
     out_alpha = alpha + (1.0f - alpha) * bg_alpha;
 }
 
-__global__ void rayTracingKernel(uchar4* frame_buffer, uint32_t width, uint32_t height, const Camera* camera, const AABB* bbox, const VolumeData<float>* volume) {
+__global__ void rayTracingKernel(
+    uchar4* frame_buffer, uint32_t width,
+    uint32_t height, const Camera* camera,
+    const AABB* bbox,
+    const VolumeData<float>* volume,
+    TransferFunctionType tf_type,
+    const float step_size = 0.01f
+)
+{
     uint32_t x = blockIdx.x * blockDim.x + threadIdx.x;
     uint32_t y = blockIdx.y * blockDim.y + threadIdx.y;
     if (x >= width || y >= height) return;
@@ -60,7 +61,6 @@ __global__ void rayTracingKernel(uchar4* frame_buffer, uint32_t width, uint32_t 
 
     Ray ray = camera->generateRay(u, v);
     float tmin, tmax;
-    float step_size = 0.01f;
     
     glm::vec3 color(0.0f, 0.0f, 0.5f);
     float alpha = 0.2f;
@@ -75,8 +75,7 @@ __global__ void rayTracingKernel(uchar4* frame_buffer, uint32_t width, uint32_t 
             glm::vec3 p = ray.at(t);
             glm::vec3 local_pos = bbox->getLocalPos(p);
             float val = volume->at(local_pos);
-            // glm::vec4 rgba = tf->getColor(val);
-            glm::vec4 rgba = getColor(val);
+            glm::vec4 rgba = getColor(val, tf_type);
             color = glm::vec3(rgba.x, rgba.y, rgba.z);
             alpha = rgba.w;
             composite(color, alpha, bg_color, bg_alpha, out_color, out_alpha);
@@ -93,26 +92,85 @@ __global__ void rayTracingKernel(uchar4* frame_buffer, uint32_t width, uint32_t 
     frame_buffer[idx].z = b;
 }
 
+void rayTracingHost(
+    uchar4* frame_buffer, uint32_t width,
+    uint32_t height, const Camera* camera,
+    const AABB* bbox,
+    const VolumeData<float>* volume,
+    TransferFunctionType tf_type,
+    const float step_size = 0.01f
+)
+{
+    for (uint32_t x = 0; x < width; ++x) {
+        for (uint32_t y = 0; y < height; ++y) {
+            uint32_t idx = y * width + x;
+            float u = ((float)x + 0.5f) / width;
+            float v = ((float)y + 0.5f) / height;
+
+            Ray ray = camera->generateRay(u, v);
+            float tmin, tmax;
+            glm::vec3 color(0.0f, 0.0f, 0.5f);
+            float alpha = 0.2f;
+            glm::vec3 bg_color(0.0f);
+            float bg_alpha = 0.0f;
+            glm::vec3 out_color(0.0f);
+            float out_alpha = 0.0f;
+            unsigned char r = 0, g = 0, b = 0;
+            if (bbox->ray_intersect(&ray, &tmin, &tmax)) {
+                float t = tmax;
+                while (t > tmin) {
+                    glm::vec3 p = ray.at(t);
+                    glm::vec3 local_pos = bbox->getLocalPos(p);
+                    float val = volume->at(local_pos);
+                    glm::vec4 rgba = getColor(val, tf_type);
+                    color = glm::vec3(rgba.x, rgba.y, rgba.z);
+                    alpha = rgba.w;
+                    composite(color, alpha, bg_color, bg_alpha, out_color, out_alpha);
+                    bg_color = out_color;
+                    bg_alpha = out_alpha;
+                    t -= step_size;
+                }
+                r = (unsigned char)(255.0f * out_color.x);
+                g = (unsigned char)(255.0f * out_color.y);
+                b = (unsigned char)(255.0f * out_color.z);
+            }
+            frame_buffer[idx].x = r;
+            frame_buffer[idx].y = g;
+            frame_buffer[idx].z = b;
+        }
+    }
+}
+
 
 struct VolumeRenderer {
     uint32_t res_x = 0;
     uint32_t res_y = 0;
     GLuint gl_texture_id;
     cudaGraphicsResource* cuda_resource;
-    cudaSurfaceObject_t surface_obj;
     uchar4* frame_buffer;
     size_t size;
-    // TransferFunction* tf;
+    TransferFunctionType tf = TransferFunctionType::GRAYSCALE;
+    float sampling_rate = 10.0f; // inverse of step size
+    bool on_host = false;
 
-    VolumeRenderer(uint32_t res_x, uint32_t res_y) : res_x(res_x), res_y(res_y) {
+    VolumeRenderer(uint32_t res_x, uint32_t res_y, bool on_host=false) : res_x(res_x), res_y(res_y), on_host(on_host) {
         size = res_x * res_y * sizeof(uchar4);
-        cudaMalloc(&frame_buffer, size);
-        cudaMemset(frame_buffer, 255, size);
+        if (on_host) {
+            frame_buffer = (uchar4*)malloc(size);
+            memset(frame_buffer, 255, size);
+        } else {
+            cudaMalloc(&frame_buffer, size);
+            cudaMemset(frame_buffer, 255, size);
+        }
     }
 
     ~VolumeRenderer() {
-        cudaGraphicsUnregisterResource(cuda_resource);
-        cudaFree(frame_buffer);
+        if (on_host) {
+            free(frame_buffer);
+        } else {
+            cudaGraphicsUnregisterResource(cuda_resource);
+            cudaFree(frame_buffer);
+        }
     }
 
     void init() {
@@ -121,12 +179,8 @@ struct VolumeRenderer {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, res_x, res_y, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        cudaGraphicsGLRegisterImage(&cuda_resource, gl_texture_id, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsSurfaceLoadStore);
+        if (!on_host) cudaGraphicsGLRegisterImage(&cuda_resource, gl_texture_id, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsSurfaceLoadStore);
     }
-
-    // void setTransferFunction(TransferFunction** tf) {
-    //     this->tf = tf[0];
-    // }
 
     void renderTexture() {
         cudaArray* array;
@@ -144,6 +198,14 @@ struct VolumeRenderer {
     }
 
     void render(const Camera& camera, const AABB& bbox, const VolumeData<float>* d_volume) {
+        if (on_host) {
+            render_host(camera, bbox, d_volume);
+        } else {
+            render_device(camera, bbox, d_volume);
+        }
+    }
+
+    void render_device(const Camera& camera, const AABB& bbox, const VolumeData<float>* d_volume) {
         cudaArray* array;
         cudaGraphicsMapResources(1, &cuda_resource);
         cudaGraphicsSubResourceGetMappedArray(&array, cuda_resource, 0, 0);
@@ -157,12 +219,17 @@ struct VolumeRenderer {
         cudaMalloc(&d_bbox, sizeof(AABB));
         cudaMemcpy(d_camera, &camera, sizeof(Camera), cudaMemcpyHostToDevice);
         cudaMemcpy(d_bbox, &bbox, sizeof(AABB), cudaMemcpyHostToDevice);
-        rayTracingKernel<<<numBlocks, blockSize>>>(frame_buffer, res_x, res_y, d_camera, d_bbox, d_volume);
+        rayTracingKernel<<<numBlocks, blockSize>>>(frame_buffer, res_x, res_y, d_camera, d_bbox, d_volume, tf, 1.0f / sampling_rate);
         cudaDeviceSynchronize();
         cudaMemcpyToArray(array, 0, 0, frame_buffer, size, cudaMemcpyDeviceToDevice);
         cudaGraphicsUnmapResources(1, &cuda_resource);
         cudaFree(d_camera);
         cudaFree(d_bbox);
+    }
+
+    void render_host(const Camera& camera, const AABB& bbox, const VolumeData<float>* d_volume) {
+        rayTracingHost(frame_buffer, res_x, res_y, &camera, &bbox, d_volume, tf, 1.0f / sampling_rate);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, res_x, res_y, 0, GL_RGBA, GL_UNSIGNED_BYTE, frame_buffer);
     }
 };
 
@@ -214,7 +281,7 @@ int main() {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
 
-    VolumeRenderer renderer(VIS_WIDTH, HEIGHT);
+    VolumeRenderer renderer(VIS_WIDTH, HEIGHT, USE_CPU);
     renderer.init();
 
     const char* VIS_WINDOW_NAME = "Volume";
@@ -225,24 +292,27 @@ int main() {
     ImVec2 CONFIG_WINDOW_SIZE = ImVec2(CONFIG_WIDTH, HEIGHT);
 
     // Camera
-    glm::vec3 eye(0.5f, 0.5f, 0.5f);
+    glm::vec3 eye(-1.0f, 0.0f, 0.0f);
     glm::vec3 center(0.0f, 0.0f, 0.0f);
-    glm::vec3 up(0.0f, 1.0f, 0.0f);
+    glm::vec3 up(0.0f, 0.0f, 1.0f);
     float phi = 0.0f;
     float theta = 0.0f;
     float radius = CAMERA_RADIUS;
     float camera_speed = CAMERA_SPEED;
 
     // load volume data
-    DataLoader loader("../data/MRbrain.bin", true);
+    DataLoader loader("../data/CThead.bin", true);
     glm::vec3 voxel_ratio(1.0f, 1.0f, 2.0f);
     VolumeData<float> volume(loader.getData(), loader.getSize(), voxel_ratio);
+    const float* h_volume_data = loader.getData();
+    Voxel* h_voxels = volume.getVoxels();
+    VolumeData<float> h_volume(h_volume_data, h_voxels, loader.getSize(), voxel_ratio);
     float* d_volume_data;
     Voxel* d_voxels;
     cudaMalloc(&d_volume_data, loader.getNum() * sizeof(float));
     cudaMalloc(&d_voxels, volume.getNum() * sizeof(Voxel));
-    cudaMemcpy(d_volume_data, loader.getData(), loader.getNum() * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_voxels, volume.getVoxels(), volume.getNum() * sizeof(Voxel), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_volume_data, h_volume_data, loader.getNum() * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_voxels, h_voxels, volume.getNum() * sizeof(Voxel), cudaMemcpyHostToDevice);
     VolumeData<float>* d_volume;
     volume.setData(d_volume_data);
     volume.setVoxels(d_voxels);
@@ -256,12 +326,7 @@ int main() {
     // move volume to the center
     AABB bbox(-volume_shape / 2.0f, volume_shape / 2.0f);
 
-    // glfwSetWindowUserPointer(window, &camera);
-    // TransferFunction* tf = new SkullTransferFunction();
-    GrayScaleTransferFunction** d_tf;
-    cudaMalloc(&d_tf, sizeof(GrayScaleTransferFunction*));
-    createTransferFunctions<<<1, 1>>>(d_tf);
-    CUDA_CHECK_THROW(cudaDeviceSynchronize());
+    const char* tf_names[] = {"GRAYSCALE", "TF1", "TF2"};
 
     // Main loop
     Timer timer;
@@ -275,14 +340,18 @@ int main() {
             theta = theta + camera_speed * deltaTime;
             theta = theta > 360.0f ? theta - 360.0f : theta;
             eye = radius * glm::vec3(-cos(glm::radians(phi)) * cos(glm::radians(theta)),
-                            sin(glm::radians(phi)),
-                            cos(glm::radians(phi)) * sin(glm::radians(theta))
+                            cos(glm::radians(phi)) * sin(glm::radians(theta)),
+                            sin(glm::radians(phi))
                             );
             timer.update();
         }
         
         Camera camera(eye, center - eye, up, YAW, PITCH, FOV, float(VIS_WIDTH) / HEIGHT);
-        renderer.render(camera, bbox, d_volume);
+        if (renderer.on_host) {
+            renderer.render_host(camera, bbox, &h_volume);
+        } else {
+            renderer.render_device(camera, bbox, d_volume);
+        }
 
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
@@ -299,6 +368,8 @@ int main() {
         ImGui::SetWindowSize(CONFIG_WINDOW_NAME, CONFIG_WINDOW_SIZE);
         ImGui::Begin(CONFIG_WINDOW_NAME);
         ImGui::Text("%.2f FPS", io.Framerate);
+        ImGui::Combo("Transfer Function", (int*)&renderer.tf, tf_names, IM_ARRAYSIZE(tf_names));
+        ImGui::SliderFloat("Sampling Rate", &renderer.sampling_rate, 1.0f, 200.0f);
         ImGui::End();
 
         ImGui::Render();
@@ -315,6 +386,7 @@ int main() {
     cudaFree(d_volume_data);
     cudaFree(d_voxels);
     cudaFree(d_volume);
+    free(h_voxels);
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

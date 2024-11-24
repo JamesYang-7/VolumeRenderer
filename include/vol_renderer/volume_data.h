@@ -28,7 +28,7 @@ public:
         return data;
     }
 
-    __host__ __device__ const Voxel* getVoxels() const {
+    __host__ __device__ Voxel* getVoxels() const {
         return voxels;
     }
 

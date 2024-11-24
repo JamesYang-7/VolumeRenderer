@@ -2,37 +2,20 @@
 
 #include <glm/glm.hpp>
 
-class TransferFunction {
-public:
-    __host__ __device__ TransferFunction() {}
-
-    __host__ __device__ virtual glm::vec4 getColor(float value) const = 0;
+enum class TransferFunctionType {
+    GRAYSCALE,
+    TF1,
+    TF2
 };
 
-class GrayScaleTransferFunction : public TransferFunction {
-public:
-    __host__ __device__ GrayScaleTransferFunction() : TransferFunction() {}
-
-    __host__ __device__ glm::vec4 getColor(float value) const {
-        return glm::vec4(value, value, value, value);
+__host__ __device__ glm::vec4 getColor(float value, TransferFunctionType type) {
+    glm::vec4 color(0.0f);
+    if (type == TransferFunctionType::GRAYSCALE) {
+        color = glm::vec4(value, value, value, value);
+    }else if (type == TransferFunctionType::TF1) {
+        color = glm::vec4(0, 0, value, value);
+    } else if (type == TransferFunctionType::TF2){
+        color = glm::vec4(0, value, 0, value);
     }
-};
-
-class SkullTransferFunction : public TransferFunction {
-public:
-    __host__ __device__ SkullTransferFunction() : TransferFunction() {}
-
-    __host__ __device__ glm::vec4 getColor(float value) const {
-        if (value < 0.03) {
-            return glm::vec4(0.0, 0.0, 0.0, 0.0);
-        } else if (value < 1.0) {
-            return glm::vec4(1.0, 1.0, 1.0, 0.8);
-        } else {
-            return glm::vec4(0.0, 0.0, 0.0, 0.0);
-        }
-    }
-};
-
-__host__ __device__ glm::vec4 getColor(float value) {
-    return glm::vec4(value, value, value, value);
+    return color;
 }
