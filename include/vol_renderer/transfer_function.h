@@ -27,7 +27,8 @@ __host__ __device__ glm::vec4 getColor(float value, TransferFunctionType type) {
         }
     } else if (type == TransferFunctionType::NERVE){
         if (value > 0.30 && value < 0.35) {
-            color = glm::vec4(value, value, value, value);
+            float gray = value * 2.0f;
+            color = glm::vec4(gray, gray, gray, value);
         } else {
             color = glm::vec4(0.0, 0.0, 0.0, 0.0);
         }

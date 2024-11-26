@@ -70,7 +70,7 @@ __global__ void rayTracingKernel(
     float bg_alpha = 0.0f;
     glm::vec3 out_color(0.0f);
     float out_alpha = 0.0f;
-    unsigned char r = 0, g = 0, b = 0;
+    unsigned char r = 0, g = 0, b = 0, a = 0;
     if (bbox->ray_intersect(&ray, &tmin, &tmax)) {
         float t = tmax;
         while (t > tmin) {
@@ -88,10 +88,12 @@ __global__ void rayTracingKernel(
         r = (unsigned char)(255.0f * out_color.x);
         g = (unsigned char)(255.0f * out_color.y);
         b = (unsigned char)(255.0f * out_color.z);
+        a = (unsigned char)(255.0f * out_alpha);
     }
     frame_buffer[idx].x = r;
     frame_buffer[idx].y = g;
     frame_buffer[idx].z = b;
+    frame_buffer[idx].w = a;
 }
 
 void rayTracingHost(
@@ -154,7 +156,7 @@ struct VolumeRenderer {
     uchar4* frame_buffer;
     size_t size;
     TransferFunctionType tf = TransferFunctionType::GRAYSCALE;
-    float sampling_rate = 10.0f; // inverse of step size
+    float sampling_rate = 100.0f; // inverse of step size
     bool on_host = false;
 
     VolumeRenderer(uint32_t res_x, uint32_t res_y, bool on_host=false) : res_x(res_x), res_y(res_y), on_host(on_host) {
