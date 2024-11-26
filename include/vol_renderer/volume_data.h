@@ -12,7 +12,7 @@ template <typename T>
 class VolumeData {
 public:
     VolumeData(const T* data, glm::uvec3 data_shape, glm::vec3 voxel_ratio = glm::vec3(1.0f));
-    __host__ __device__ VolumeData(const T* data, Voxel* voxels, glm::uvec3 data_shape, glm::vec3 voxel_ratio = glm::vec3(1.0f));
+    __host__ __device__ VolumeData(T* data, Voxel* voxels, glm::uvec3 data_shape, glm::vec3 voxel_ratio = glm::vec3(1.0f));
 
     __host__ __device__ T at(const glm::vec3& pos) const;
 
@@ -20,8 +20,12 @@ public:
         return m_shape;
     }
 
-    __host__ __device__ uint32_t getNum() const {
+    __host__ __device__ uint32_t getNumVoxels() const {
         return m_shape.x * m_shape.y * m_shape.z;
+    }
+
+    __host__ __device__ uint32_t getNumData() const {
+        return m_data_shape.x * m_data_shape.y * m_data_shape.z;
     }
 
     __host__ __device__ const T* getData() const {
@@ -42,8 +46,14 @@ public:
 
     void print();
 
+    VolumeData<T>* copyToDevice() const;
+
+    void cudaRelease();
+    void release();
+
 private:
     const T* data;
+    T* m_data;
     Voxel* voxels;
     glm::uvec3 m_data_shape;
     glm::uvec3 m_shape;

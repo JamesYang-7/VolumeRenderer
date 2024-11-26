@@ -4,18 +4,33 @@
 
 enum class TransferFunctionType {
     GRAYSCALE,
-    TF1,
-    TF2
+    SKULL,
+    SKIN,
+    NERVE,
 };
 
 __host__ __device__ glm::vec4 getColor(float value, TransferFunctionType type) {
     glm::vec4 color(0.0f);
     if (type == TransferFunctionType::GRAYSCALE) {
         color = glm::vec4(value, value, value, value);
-    }else if (type == TransferFunctionType::TF1) {
-        color = glm::vec4(0, 0, value, value);
-    } else if (type == TransferFunctionType::TF2){
-        color = glm::vec4(0, value, 0, value);
+    }else if (type == TransferFunctionType::SKULL) {
+        if (value < 0.5) {
+            color = glm::vec4(0.0, 0.0, 0.0, 0.0);
+        } else {
+            color = glm::vec4(0.5f, 0.5f, 0.5f, value * 0.5f);
+        }
+    } else if (type == TransferFunctionType::SKIN){
+        if (value > 0.1 && value < 0.3) {
+            color = 2.0f * glm::vec4(value, value, value, value / 2.0f);
+        } else {
+            color = glm::vec4(0.0, 0.0, 0.0, 0.0);
+        }
+    } else if (type == TransferFunctionType::NERVE){
+        if (value > 0.30 && value < 0.35) {
+            color = glm::vec4(value, value, value, value);
+        } else {
+            color = glm::vec4(0.0, 0.0, 0.0, 0.0);
+        }
     }
     return color;
 }

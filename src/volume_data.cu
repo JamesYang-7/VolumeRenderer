@@ -36,12 +36,13 @@ VolumeData<T>::VolumeData(const T* data, glm::uvec3 data_shape, glm::vec3 voxel_
 }
 
 template <typename T>
-__host__ __device__ VolumeData<T>::VolumeData(const T* data, Voxel* voxels, glm::uvec3 data_shape, glm::vec3 voxel_ratio)
+__host__ __device__ VolumeData<T>::VolumeData(T* data, Voxel* voxels, glm::uvec3 data_shape, glm::vec3 voxel_ratio)
     :
     m_data_shape(data_shape),
     m_voxel_ratio(voxel_ratio)
 {
     this->data = data;
+    m_data = data;
     this->voxels = voxels;
     m_shape = m_data_shape - glm::uvec3(1);
     m_voxel_size = glm::vec3(1.0f) / glm::vec3(m_shape);
@@ -76,6 +77,32 @@ void VolumeData<T>::print() {
     std::cout << "Shape: (" << m_shape.x << ", " << m_shape.y << ", " << m_shape.z << ")" << std::endl;
     std::cout << "Voxel Size: (" << m_voxel_size.x << ", " << m_voxel_size.y << ", " << m_voxel_size.z << ")" << std::endl;
     std::cout << "Voxel Ratio: (" << m_voxel_ratio.x << ", " << m_voxel_ratio.y << ", " << m_voxel_ratio.z << ")" << std::endl;
+}
+
+template <typename T>
+VolumeData<T>* VolumeData<T>::copyToDevice() const {
+    T* data_d;
+    Voxel* voxels_d;
+    cudaMalloc(&data_d, getNumData() * sizeof(T));
+    cudaMalloc(&voxels_d, getNumVoxels() * sizeof(Voxel));
+    cudaMemcpy(data_d, data, getNumData() * sizeof(T), cudaMemcpyHostToDevice);
+    cudaMemcpy(voxels_d, voxels, getNumVoxels() * sizeof(Voxel), cudaMemcpyHostToDevice);
+    VolumeData<T>* new_volume_tmp =  new VolumeData<T>(data_d, voxels_d, m_data_shape, m_voxel_ratio);
+    VolumeData<T>* new_volume;
+    cudaMalloc(&new_volume, sizeof(VolumeData<T>));
+    cudaMemcpy(new_volume, new_volume_tmp, sizeof(VolumeData<T>), cudaMemcpyHostToDevice);
+    return new_volume;
+}
+
+template <typename T>
+void VolumeData<T>::cudaRelease() {
+    cudaFree(m_data);
+    cudaFree(voxels);
+}
+
+template <typename T>
+void VolumeData<T>::release() {
+    free(voxels);
 }
 
 template class VolumeData<float>;
