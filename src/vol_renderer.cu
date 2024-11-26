@@ -45,21 +45,22 @@ __host__ __device__ void composite(
 }
 
 __global__ void rayTracingKernel(
-    uchar4* frame_buffer, uint32_t width,
+    float* frame_buffer, uint32_t width,
     uint32_t height, const Camera* camera,
     const AABB* bbox,
     const VolumeData<float>* volume,
     TransferFunctionType tf_type,
-    const float step_size = 0.01f
+    const float step_size = 0.01f,
+    uint32_t subsample_level = 1
 )
 {
     uint32_t x = blockIdx.x * blockDim.x + threadIdx.x;
     uint32_t y = blockIdx.y * blockDim.y + threadIdx.y;
-    if (x >= width || y >= height) return;
-    uint32_t idx = y * width + x;
+    if (x >= width * subsample_level || y >= height * subsample_level) return;
+    uint32_t pixel_idx = y / subsample_level * width  + x / subsample_level;
 
-    float u = ((float)x + 0.5f) / width;
-    float v = ((float)y + 0.5f) / height;
+    float u = ((float)x + 0.5f) / (width * subsample_level);
+    float v = ((float)y + 0.5f) / (height * subsample_level);
 
     Ray ray = camera->generateRay(u, v);
     float tmin, tmax;
@@ -70,9 +71,10 @@ __global__ void rayTracingKernel(
     float bg_alpha = 0.0f;
     glm::vec3 out_color(0.0f);
     float out_alpha = 0.0f;
-    unsigned char r = 0, g = 0, b = 0, a = 0;
+    float r = 0, g = 0, b = 0, a = 0;
     if (bbox->ray_intersect(&ray, &tmin, &tmax)) {
         float t = tmax;
+        tmin = tmin < 0.0f ? 0.0f : tmin;
         while (t > tmin) {
             glm::vec3 p = ray.at(t);
             glm::vec3 local_pos = bbox->getLocalPos(p);
@@ -85,19 +87,20 @@ __global__ void rayTracingKernel(
             bg_alpha = out_alpha;
             t -= step_size;
         }
-        r = (unsigned char)(255.0f * out_color.x);
-        g = (unsigned char)(255.0f * out_color.y);
-        b = (unsigned char)(255.0f * out_color.z);
-        a = (unsigned char)(255.0f * out_alpha);
+        uint32_t subsample_level_square = subsample_level * subsample_level;
+        r = out_color.x / subsample_level_square;
+        g = out_color.y / subsample_level_square;
+        b = out_color.z / subsample_level_square;
+        a = out_alpha / subsample_level_square;
     }
-    frame_buffer[idx].x = r;
-    frame_buffer[idx].y = g;
-    frame_buffer[idx].z = b;
-    frame_buffer[idx].w = a;
+    atomicAdd(&frame_buffer[pixel_idx * 4], r);
+    atomicAdd(&frame_buffer[pixel_idx * 4 + 1], g);
+    atomicAdd(&frame_buffer[pixel_idx * 4 + 2], b);
+    atomicAdd(&frame_buffer[pixel_idx * 4 + 3], a);
 }
 
 void rayTracingHost(
-    uchar4* frame_buffer, uint32_t width,
+    float* frame_buffer, uint32_t width,
     uint32_t height, const Camera* camera,
     const AABB* bbox,
     const VolumeData<float>* volume,
@@ -119,9 +122,10 @@ void rayTracingHost(
             float bg_alpha = 0.0f;
             glm::vec3 out_color(0.0f);
             float out_alpha = 0.0f;
-            unsigned char r = 0, g = 0, b = 0, a = 0;
+            float r = 0, g = 0, b = 0, a = 0;
             if (bbox->ray_intersect(&ray, &tmin, &tmax)) {
                 float t = tmax;
+                tmin = tmin < 0.0f ? 0.0f : tmin;
                 while (t > tmin) {
                     glm::vec3 p = ray.at(t);
                     glm::vec3 local_pos = bbox->getLocalPos(p);
@@ -134,39 +138,39 @@ void rayTracingHost(
                     bg_alpha = out_alpha;
                     t -= step_size;
                 }
-                r = (unsigned char)(255.0f * out_color.x);
-                g = (unsigned char)(255.0f * out_color.y);
-                b = (unsigned char)(255.0f * out_color.z);
-                a = (unsigned char)(255.0f * out_alpha);
+                r = out_color.x;
+                g = out_color.y;
+                b = out_color.z;
+                a = out_alpha;
             }
-            frame_buffer[idx].x = r;
-            frame_buffer[idx].y = g;
-            frame_buffer[idx].z = b;
-            frame_buffer[idx].w = a;
+            frame_buffer[idx * 4] = r;
+            frame_buffer[idx * 4 + 1] = g;
+            frame_buffer[idx * 4 + 2] = b;
+            frame_buffer[idx * 4 + 3] = a;
         }
     }
 }
-
 
 struct VolumeRenderer {
     uint32_t res_x = 0;
     uint32_t res_y = 0;
     GLuint gl_texture_id;
     cudaGraphicsResource* cuda_resource;
-    uchar4* frame_buffer;
+    float* frame_buffer;
     size_t size;
     TransferFunctionType tf = TransferFunctionType::GRAYSCALE;
     float sampling_rate = 100.0f; // inverse of step size
     bool on_host = false;
+    uint32_t subsample_level = 1;
 
     VolumeRenderer(uint32_t res_x, uint32_t res_y, bool on_host=false) : res_x(res_x), res_y(res_y), on_host(on_host) {
-        size = res_x * res_y * sizeof(uchar4);
+        size = res_x * res_y * sizeof(float) * 4;
         if (on_host) {
-            frame_buffer = (uchar4*)malloc(size);
-            memset(frame_buffer, 255, size);
+            frame_buffer = (float*)malloc(size);
+            memset(frame_buffer, 1.0f, size);
         } else {
             cudaMalloc(&frame_buffer, size);
-            cudaMemset(frame_buffer, 255, size);
+            cudaMemset(frame_buffer, 1.0f, size);
         }
     }
 
@@ -182,25 +186,10 @@ struct VolumeRenderer {
     void init() {
         glGenTextures(1, &gl_texture_id);
         glBindTexture(GL_TEXTURE_2D, gl_texture_id);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, res_x, res_y, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, res_x, res_y, 0, GL_RGBA, GL_FLOAT, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         if (!on_host) cudaGraphicsGLRegisterImage(&cuda_resource, gl_texture_id, GL_TEXTURE_2D, cudaGraphicsRegisterFlagsSurfaceLoadStore);
-    }
-
-    void renderTexture() {
-        cudaArray* array;
-        cudaGraphicsMapResources(1, &cuda_resource);
-        cudaGraphicsSubResourceGetMappedArray(&array, cuda_resource, 0, 0);
-
-        dim3 blockSize(16, 16);
-        dim3 numBlocks((res_x + blockSize.x - 1) / blockSize.x, 
-                       (res_y + blockSize.y - 1) / blockSize.y);
-        processTextureKernel<<<numBlocks, blockSize>>>(frame_buffer, res_x, res_y);
-
-        cudaMemcpyToArray(array, 0, 0, frame_buffer, size, cudaMemcpyDeviceToDevice);
-        cudaDeviceSynchronize();
-        cudaGraphicsUnmapResources(1, &cuda_resource);
     }
 
     void render(const Camera& camera, const AABB& bbox, const VolumeData<float>* volume) {
@@ -217,15 +206,16 @@ struct VolumeRenderer {
         cudaGraphicsSubResourceGetMappedArray(&array, cuda_resource, 0, 0);
 
         dim3 blockSize(16, 16);
-        dim3 numBlocks((res_x + blockSize.x - 1) / blockSize.x, 
-                       (res_y + blockSize.y - 1) / blockSize.y);
+        dim3 numBlocks((res_x * subsample_level + blockSize.x - 1) / blockSize.x, 
+                       (res_y * subsample_level + blockSize.y - 1) / blockSize.y);
         Camera* d_camera;
         AABB* d_bbox;
         cudaMalloc(&d_camera, sizeof(Camera));
         cudaMalloc(&d_bbox, sizeof(AABB));
         cudaMemcpy(d_camera, &camera, sizeof(Camera), cudaMemcpyHostToDevice);
         cudaMemcpy(d_bbox, &bbox, sizeof(AABB), cudaMemcpyHostToDevice);
-        rayTracingKernel<<<numBlocks, blockSize>>>(frame_buffer, res_x, res_y, d_camera, d_bbox, volume, tf, 1.0f / sampling_rate);
+        cudaMemset(frame_buffer, 0.0f, size);
+        rayTracingKernel<<<numBlocks, blockSize>>>(frame_buffer, res_x, res_y, d_camera, d_bbox, volume, tf, 1.0f / sampling_rate, subsample_level);
         cudaDeviceSynchronize();
         cudaMemcpyToArray(array, 0, 0, frame_buffer, size, cudaMemcpyDeviceToDevice);
         cudaGraphicsUnmapResources(1, &cuda_resource);
@@ -235,7 +225,7 @@ struct VolumeRenderer {
 
     void render_host(const Camera& camera, const AABB& bbox, const VolumeData<float>* volume) {
         rayTracingHost(frame_buffer, res_x, res_y, &camera, &bbox, volume, tf, 1.0f / sampling_rate);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, res_x, res_y, 0, GL_RGBA, GL_UNSIGNED_BYTE, frame_buffer);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, res_x, res_y, 0, GL_RGBA, GL_FLOAT, frame_buffer);
     }
 };
 
@@ -252,7 +242,7 @@ GLFWwindow* createWindow(int width, int height, const char* title) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // Create window
-    GLFWwindow* window = glfwCreateWindow(width, height, "Hello GUI", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(width, height, "Volume Renderer", nullptr, nullptr);
     if (!window) {
         std::cerr << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
@@ -296,6 +286,7 @@ int main() {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
 
+    // Renderer
     VolumeRenderer renderer(VIS_WIDTH, HEIGHT, USE_CPU);
     renderer.init();
 
@@ -396,7 +387,10 @@ int main() {
         ImGui::Text("%.2f FPS", io.Framerate);
         ImGui::Combo("Data", &data_idx, data_names, IM_ARRAYSIZE(data_names));
         ImGui::Combo("Transfer Function", (int*)&renderer.tf, tf_names, IM_ARRAYSIZE(tf_names));
-        ImGui::SliderFloat("Sampling Rate", &renderer.sampling_rate, 1.0f, 500.0f);
+        ImGui::SliderFloat("Sampling Rate", &renderer.sampling_rate, 1.0f, 300.0f);
+        ImGui::SliderInt("Subsampling Level", (int*)&renderer.subsample_level, 1, 4);
+        ImGui::SliderFloat("Camera Speed", &camera_speed, 0.0f, 180.0f);
+        ImGui::SliderFloat("Camera Radius", &radius, 0.1f, 1.0f);
         ImGui::End();
 
         ImGui::Render();

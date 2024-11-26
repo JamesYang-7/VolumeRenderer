@@ -20,7 +20,5 @@ struct AABB {
 
     __host__ __device__ bool ray_intersect(const Ray* ray, float* t_in, float* t_out) const;
 
-    __host__ __device__ bool isect() const;
-
     __host__ __device__ glm::vec3 getLocalPos(const glm::vec3& pos) const;
 };
